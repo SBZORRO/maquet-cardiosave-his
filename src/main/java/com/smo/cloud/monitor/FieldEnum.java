@@ -1,7 +1,7 @@
 package com.smo.cloud.monitor;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 
 /**
  * Hello world!
@@ -84,8 +84,8 @@ public enum FieldEnum {
 //  String doc;
   SetField sf = FieldEnum::setf;
 
-  public interface SetField<T>{
-    void set(FieldEnum e,Field field, String name, T value);
+  public interface SetField<T> {
+    void set(FieldEnum e, Field field, String name, T value);
   }
 //  private FieldEnum(Class type, SetField sf) {
 //    this.type = type;
@@ -93,15 +93,16 @@ public enum FieldEnum {
 //  }
 
   public <T> void setf(Field field, String name, T value) {
-    VarHandle nameHandle = null;
+    MethodHandle nameHandle = null;
     try {
-      nameHandle = MethodHandles.lookup()
-          .findVarHandle(Field.class, name, type);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
+      nameHandle = MethodHandles.lookup().findSetter(Field.class, name, type);
+//          .findVarHandle(Field.class, name, type);
+
+      nameHandle.invoke(field, value);
+    } catch (Throwable e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
-    nameHandle.set(field, value);
   }
 
 }

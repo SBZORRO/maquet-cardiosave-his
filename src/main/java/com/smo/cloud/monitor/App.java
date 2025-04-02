@@ -1,7 +1,22 @@
 package com.smo.cloud.monitor;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.smo.cloud.monitor.common.service.config.alibaba.lmq.LmqAsyncSmoClient;
+import com.smo.cloud.monitor.jiuzhou.receive.client.contants.constant.DataHandlerConsts;
+import com.smo.cloud.monitor.jiuzhou.receive.client.transmit.TransmitClient;
+import com.smo.cloud.monitor.model.metadata.EcgInfo;
+import com.smo.cloud.monitor.model.metadata.IbpInfo;
+import com.smo.cloud.monitor.model.metadata.MultiParameter;
+import com.smo.cloud.monitor.model.metadata.OtsStructuredData;
 
 /**
  * Hello world!
@@ -37,6 +52,8 @@ public class App {
     System.out.println();
     byte[] cmdba = HexByteUtil.cmdToByteNoSep(cmd);
 
+    System.out.println();
+
     parseCmd(cmdba);
   }
 
@@ -51,10 +68,6 @@ public class App {
     for (int i = 12; i < fields.length; i++) {
       FieldEnum e = fields[i];
       e.sf.set(e, field, e.name(), res[e.ordinal()]);
-
-//      VarHandle nameHandle = MethodHandles.lookup()
-//          .findVarHandle(Field.class, e.name(), int.class);
-//      nameHandle.set(field, res[e.ordinal()]);
     }
 
     // unsigned int
@@ -72,7 +85,8 @@ public class App {
 
     field.ecgTriggerMarkerInterval = HexByteUtil.assembleByteBe(a, 616, 25, 1);
     field.apInflationInterval = HexByteUtil.assembleByteBe(a, 641, 25, 1);
-    field.pressureThresholdBeatToBeat = HexByteUtil.assembleByteBe(a, 666, 50, 2);
+    field.pressureThresholdBeatToBeat = HexByteUtil
+        .assembleByteBe(a, 666, 50, 2);
     field.skinPacerDetected = HexByteUtil.assembleByteBe(a, 716, 25, 1);
     field.externalPacerDetected = HexByteUtil.assembleByteBe(a, 741, 25, 1);
 
@@ -81,76 +95,74 @@ public class App {
     field.batteryTimeRemaining = field.batteryTimeRemaining & 0xffff;
     field.externalHeliumTankPressure = field.externalHeliumTankPressure
         & 0xffff;
-    
+
     Gson GSON = new Gson();
     JsonObject jo = new JsonObject();
     System.out.println(GSON.toJson(field));
+
+    
+    
+
   }
 
-  long protocolVersion;
-  long pumpID;
-  long timeStampSeconds;
-  long timeStampSecondsFraction;
-  float[] ecgWaveformArray = new float[100];
-  float[] apWaveformArray = new float[100];
-  float[] balloonWaveformArray = new float[100];
-  int[] ecgTriggerMarkerInterval = new int[25];
-  int[] apInflationInterval = new int[25];
-  int[] pressureThresholdBeatToBeat = new int[25];
-  int[] skinPacerDetected = new int[25];
-  int[] externalPacerDetected = new int[25];
-  int triggerSourceSelection;
-  int pacerAV;
-  int ecgCableType;
-  int ecgLeadSelection;
-  int ecgLeadFaultStatus;
-  int ecgLeadWireMode;
-  int extECGCableConnected;
-  int apSourceSelection;
-  int apTransConnected;
-  int apFosConnected;
-  int apExtConnected;
-  int pressureThresholdMode;
-  int pressureThresholdModeValue;
-  int operationMode;
-  int pneumaticMode;
-  int minutesInStandby;
-  int apFosCalibrated;
-  int apTransducerZeroStatus;
-  int consoleModeEnabled;
-  int assistedSystolicPressure;
-  int assistedDiastolicPressure;
-  int unassistedSystolicPressure;
-  int unassistedDiastolicPressure;
-  int meanPressure;
-  int augmentedPressure;
-  int atmosphericPressure;
-  int heartRate;
-  int iabAugLevel;
-  int iabFrequencySelection;
-  int inflationSliderValue;
-  int deflationSliderValue;
-  int rWaveDeflateActive;
-  int autoRWaveDeflateActive;
-  int battery1RSOC;
-  int battery2RSOC;
-  int batteryTimeRemaining;
-  int onACMains;
-  int powerSlot1Status;
-  int powerSlot2Status;
-  int internalHeliumTankCalibration;
-  int externalHeliumTankCalibration;
-  int internalHeliumTankPressure;
-  int externalHeliumTankPressure;
-  int skinPacerThreshold;
-  int externalPacerThreshold;
-  int rTracEnabled;
-  int gasLossAlarmsEnabled;
-  int catheterAlarmsEnabled;
-  int internalRate;
-  int augAlarmValue;
-  int bpUpperLowerWindowRange;
-  int ecgScaleSize;
-  int alarmArray;
+  public static final DateTimeFormatter sm_dtf = DateTimeFormatter
+      .ofPattern("yyyyMMddHHmmss");
+
+  private final LmqAsyncSmoClient lmqAsyncSmoClient;
+  private final ApplicationConfig ac;
+
+  @Autowired
+  public App(ApplicationConfig ac,
+      LmqAsyncSmoClient lmqAsyncSmoClient) {
+    this.ac = ac;
+    this.lmqAsyncSmoClient = lmqAsyncSmoClient;
+  }
+
+  OtsStructuredData initMew(OtsStructuredData mew, Field field) {
+    MultiParameter mp = new MultiParameter();
+    mew.setData(mp);
+
+    EcgInfo info = new EcgInfo();
+    info.setLeadConfig(ac.getEcgLeads());
+    info.setPointSize(ac.getEcgPointSize());
+    info.setSignBit(true);
+    info.setPatchStatus(false);
+    info.setResolution(ac.getEcgResolution());
+    info.setSampleRate(ac.getEcgSampleRate());
+    mew.setEcgInfo(info);
+
+    IbpInfo ibp = new IbpInfo();
+    ibp.setPointSize(ac.getIbpPointSize());
+    ibp.setSampleRate(ac.getIbpSampleRate());
+    ibp.setSignBit(true);
+    ibp.setPatchStatus(false);
+    ibp.setResolution(ac.getIbpResolution());
+    ibp.setWaveCode("AP");
+    mp.getIbpInfo().put("ibp1", "AP");
+
+    IbpInfo ibp2 = new IbpInfo();
+    ibp2.setPointSize(ac.getIbpPointSize());
+    ibp2.setSampleRate(ac.getIbpSampleRate());
+    ibp2.setSignBit(true);
+    ibp2.setPatchStatus(false);
+    ibp2.setResolution(ac.getIbpResolution());
+    ibp2.setWaveCode("BALLON");
+    mp.getIbpInfo().put("ibp2", "BALLON");
+
+
+    mp.setCreateDate(
+        new Date(field.timeStampSeconds * 1000
+            + (field.timeStampSecondsFraction == 0 ? 500 : 0)));
+
+    LocalDateTime ldt = LocalDateTime
+        .ofInstant(mp.getCreateDate().toInstant(), ZoneId.of("+8"));
+    System.out.println(ldt.format(sm_dtf));
+
+    mew.setInstCode(Long.toHexString(field.pumpID));
+    mew.setExtInstCode(Long.toHexString(field.pumpID));
+    
+
+    return mew;
+  }
 
 }
